@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Habit Token Vault</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { -webkit-tap-highlight-color: transparent; user-select: none; }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 16px); }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans flex flex-col justify-between">
+
+  <!-- Üst Bar: Güncel Bakiye -->
+  <header class="p-4 bg-slate-900/80 backdrop-blur sticky top-0 z-20 border-b border-slate-800 flex justify-between items-center">
+    <div>
+      <h1 class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Habit Token Vault</h1>
+      <p class="text-xs text-emerald-400 font-medium">⚡ Saf Kazanç Modu</p>
+    </div>
+    <div class="bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-full flex items-center gap-1.5">
+      <span class="text-amber-400 text-sm">🪙</span>
+      <span id="headerBalance" class="text-amber-300 font-bold text-base">0.0</span>
+      <span class="text-amber-400/70 text-xs">Token</span>
+    </div>
+  </header>
+
+  <!-- Ana İçerik Alanı (Sekmeler) -->
+  <main class="flex-1 p-4 overflow-y-auto max-w-md mx-auto w-full pb-24">
+    
+    <!-- EKRAN A: DASHBOARD -->
+    <section id="viewDashboard" class="space-y-4">
+      <div class="text-xs text-slate-400">10 dakikalık bloklar tehdit oluşturmaz. Tek tıkla başlat.</div>
+      <div id="vaultList" class="space-y-3"></div>
+    </section>
+
+    <!-- EKRAN B: CÜZDAN & KASA DURUMU -->
+    <section id="viewWallet" class="hidden space-y-4">
+      <div class="bg-gradient-to-br from-amber-500/20 to-slate-900 border border-amber-500/30 p-6 rounded-2xl text-center">
+        <span class="text-xs uppercase tracking-wider text-amber-300 font-semibold">Harcanabilir Toplam Ganimet</span>
+        <div id="walletTotal" class="text-4xl font-black text-amber-300 my-2">0.0</div>
+        <p class="text-xs text-slate-400">Eksik yok, ceza yok. Yalnızca kumbaraya attığın emek.</p>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">📜 Son Kazanç Kayıtları</h3>
+        <div id="txLogs" class="space-y-2 text-xs text-slate-300 max-h-60 overflow-y-auto">
+          <p class="text-slate-500 text-center py-4">Henüz kayıt yok. İlk aksiyonunu tamamla!</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- EKRAN C: DOPAMİN DÜKKANI -->
+    <section id="viewStore" class="hidden space-y-4">
+      <div class="bg-indigo-950/40 border border-indigo-500/30 p-4 rounded-xl">
+        <h2 class="text-sm font-bold text-indigo-300">🎉 Suçluluk Duymadan Tüket</h2>
+        <p class="text-xs text-slate-400 mt-1">Kazandığın token'ları vicdan azabı çekmeden eğlenceye dönüştür.</p>
+      </div>
+      <div id="storeList" class="space-y-2.5"></div>
+    </section>
+
+  </main>
+
+  <!-- Alt Gezinme Barı (3 Ekran) -->
+  <nav class="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur border-t border-slate-800 px-6 py-2 flex justify-around safe-bottom z-30 max-w-md mx-auto">
+    <button onclick="switchTab('dashboard')" id="nav-dashboard" class="flex flex-col items-center py-1 text-emerald-400">
+      <span class="text-lg">⏱️</span>
+      <span class="text-[10px] font-semibold mt-0.5">Kumbaralar</span>
+    </button>
+    <button onclick="switchTab('wallet')" id="nav-wallet" class="flex flex-col items-center py-1 text-slate-400">
+      <span class="text-lg">🪙</span>
+      <span class="text-[10px] font-semibold mt-0.5">Cüzdan</span>
+    </button>
+    <button onclick="switchTab('store')" id="nav-store" class="flex flex-col items-center py-1 text-slate-400">
+      <span class="text-lg">🎁</span>
+      <span class="text-[10px] font-semibold mt-0.5">Dükkan</span>
+    </button>
+  </nav>
+
+  <script>
+    // --- VERİ MODELİ & KONFİGÜRASYON ---
+    const VAULTS = [
+      {
+        id: 'spor_yasam',
+        name: '1. Spor ve Yaşam',
+        icon: '💪',
+        actions: [
+          { id: 'spor', name: 'Spor', type: 'timer', ratePerHour: 60, ratePer10Min: 10.0 },
+          { id: 'seker', name: 'Şekersiz / Karb. Gün', type: 'bounty', tokens: 30.0 },
+          { id: 'takviye', name: 'Takviye Alımı', type: 'micro', tokens: 0.5 }
+        ]
+      },
+      {
+        id: 'aile_ev',
+        name: '2. Aile / Ev',
+        icon: '🏡',
+        actions: [
+          { id: 'cocuk', name: 'Çocuk (Kaliteli Zaman)', type: 'timer', ratePerHour: 60, ratePer10Min: 10.0 },
+          { id: 'es', name: 'Eş (Kaliteli Zaman)', type: 'timer', ratePerHour: 60, ratePer10Min: 10.0 },
+          { id: 'ev_is', name: 'Ev (İş / Düzen)', type: 'timer', ratePerHour: 15, ratePer10Min: 2.5 }
+        ]
+      },
+      {
+        id: 'kendim',
+        name: '3. Kendim',
+        icon: '🌱',
+        actions: [
+          { id: 'ingilizce', name: 'İngilizce', type: 'timer', ratePerHour: 20, ratePer10Min: 3.3 },
+          { id: 'kitap', name: 'Kitap (Entelektüel)', type: 'timer', ratePerHour: 10, ratePer10Min: 1.6 }
+        ]
+      },
+      {
+        id: 'gelecek',
+        name: '4. Gelecek',
+        icon: '🚀',
+        actions: [
+          { id: 'vizyon', name: 'Gelecek (Projeler/Vizyon)', type: 'timer', ratePerHour: 100, ratePer10Min: 16.6 }
+        ]
+      }
+    ];
+
+    const REWARDS = [
+      { id: 'gaming', name: '1 Saat Vicdansız Dizi / Oyun', cost: 40, icon: '🎮' },
+      { id: 'food', name: 'Özel Dışarıdan Yemek Siparişi', cost: 150, icon: '🍔' },
+      { id: 'hobby', name: 'Hobi / Ekipman Satın Alma İzni', cost: 300, icon: '🛍️' }
+    ];
+
+    // --- LOCAL STORAGE STATE ---
+    let state = JSON.parse(localStorage.getItem('htv_state')) || {
+      balance: 0.0,
+      activeTimer: null, // { actionId, startTime, vaultId }
+      bountiesDone: {},  // { '2026-10-16_seker': true }
+      logs: []
+    };
+
+    function saveState() {
+      localStorage.setItem('htv_state', JSON.stringify(state));
+      renderUI();
+    }
+
+    const getTodayKey = () => new Date().toISOString().slice(0, 10);
+
+    // --- ZAMANLAYICI MOTORU (TIMESTAMP-DELTA) ---
+    function toggleTimer(actionId, vaultId) {
+      const now = Date.now();
+      if (state.activeTimer && state.activeTimer.actionId === actionId) {
+        // Durdur & Hesapla
+        const elapsedMinutes = (now - state.activeTimer.startTime) / 60000;
+        const vault = VAULTS.find(v => v.id === vaultId);
+        const action = vault.actions.find(a => a.id === actionId);
+
+        // Orantılı net dakika hesabı (Örn: her 10 dk için action.ratePer10Min)
+        const earned = parseFloat(((elapsedMinutes / 10) * action.ratePer10Min).toFixed(1));
+        
+        if (earned > 0) {
+          state.balance = parseFloat((state.balance + earned).toFixed(1));
+          state.logs.unshift({
+            text: `${action.name}: ${Math.floor(elapsedMinutes)} dk (${earned} Token)`,
+            time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+            type: 'gain'
+          });
+        }
+        state.activeTimer = null;
+      } else {
+        // Yeni sayaç başlat
+        state.activeTimer = { actionId, vaultId, startTime: now };
+      }
+      saveState();
+    }
+
+    // --- BOUNTY / MIKRO EYLEM ---
+    function claimBounty(actionId, tokens, name) {
+      const key = `${getTodayKey()}_${actionId}`;
+      if (state.bountiesDone[key]) return;
+
+      state.bountiesDone[key] = true;
+      state.balance = parseFloat((state.balance + tokens).toFixed(1));
+      state.logs.unshift({
+        text: `✓ ${name} (+${tokens} Token)`,
+        time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+        type: 'gain'
+      });
+      saveState();
+    }
+
+    // --- REWARD SATIN ALMA ---
+    function buyReward(rewardId) {
+      const item = REWARDS.find(r => r.id === rewardId);
+      if (state.balance < item.cost) {
+        alert("Yeterli token yok! Biraz daha ganimet biriktir.");
+        return;
+      }
+      state.balance = parseFloat((state.balance - item.cost).toFixed(1));
+      state.logs.unshift({
+        text: `🎁 Harcama: ${item.name} (-${item.cost} Token)`,
+        time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+        type: 'spend'
+      });
+      saveState();
+      alert(`Afiyetle tadını çıkar: ${item.name}!`);
+    }
+
+    // --- UI RENDER DÖNGÜSÜ ---
+    function renderUI() {
+      document.getElementById('headerBalance').innerText = state.balance.toFixed(1);
+      document.getElementById('walletTotal').innerText = state.balance.toFixed(1);
+
+      // Dashboard Render
+      const vaultListEl = document.getElementById('vaultList');
+      vaultListEl.innerHTML = VAULTS.map(vault => `
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 space-y-2">
+          <div class="flex items-center gap-2 text-slate-300 font-semibold text-xs tracking-wide">
+            <span>${vault.icon}</span>
+            <span>${vault.name}</span>
+          </div>
+          <div class="space-y-1.5">
+            ${vault.actions.map(act => {
+              if (act.type === 'timer') {
+                const isActive = state.activeTimer && state.activeTimer.actionId === act.id;
+                return `
+                  <div class="flex justify-between items-center bg-slate-950/70 border border-slate-800/80 p-2.5 rounded-xl">
+                    <div>
+                      <div class="text-xs font-medium text-slate-200">${act.name}</div>
+                      <div class="text-[10px] text-slate-400">10 dk = +${act.ratePer10Min} Token</div>
+                    </div>
+                    <button onclick="toggleTimer('${act.id}', '${vault.id}')"
+                      class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                        isActive 
+                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse' 
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      }">
+                      ${isActive ? 'DURDUR ⏹️' : 'BAŞLAT ▶️'}
+                    </button>
+                  </div>
+                `;
+              } else {
+                const isClaimed = state.bountiesDone[`${getTodayKey()}_${act.id}`];
+                return `
+                  <div class="flex justify-between items-center bg-slate-950/70 border border-slate-800/80 p-2.5 rounded-xl">
+                    <div>
+                      <div class="text-xs font-medium ${isClaimed ? 'text-slate-500 line-through' : 'text-slate-200'}">${act.name}</div>
+                      <div class="text-[10px] text-slate-400">Sabit +${act.tokens} Token / Gün</div>
+                    </div>
+                    <button onclick="claimBounty('${act.id}', ${act.tokens}, '${act.name}')"
+                      ${isClaimed ? 'disabled' : ''}
+                      class="px-3 py-1.5 rounded-lg text-xs font-bold ${
+                        isClaimed 
+                          ? 'bg-slate-800 text-slate-600 border border-slate-700 cursor-not-allowed' 
+                          : 'bg-amber-500/20 text-amber-300 border border-amber-500/30 active:scale-95'
+                      }">
+                      ${isClaimed ? 'ALINDI ✓' : 'KAP [✓]'}
+                    </button>
+                  </div>
+                `;
+              }
+            }).join('')}
+          </div>
+        </div>
+      `).join('');
+
+      // Cüzdan Logları
+      const logsEl = document.getElementById('txLogs');
+      if (state.logs.length > 0) {
+        logsEl.innerHTML = state.logs.slice(0, 15).map(l => `
+          <div class="flex justify-between items-center py-1.5 border-b border-slate-800/50">
+            <span class="${l.type === 'spend' ? 'text-rose-400' : 'text-emerald-400'}">${l.text}</span>
+            <span class="text-slate-500 text-[10px]">${l.time}</span>
+          </div>
+        `).join('');
+      }
+
+      // Dükkan Render
+      const storeListEl = document.getElementById('storeList');
+      storeListEl.innerHTML = REWARDS.map(r => `
+        <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <span class="text-xl">${r.icon}</span>
+            <div>
+              <div class="text-xs font-semibold text-slate-200">${r.name}</div>
+              <div class="text-[10px] text-amber-400 font-bold">${r.cost} Token</div>
+            </div>
+          </div>
+          <button onclick="buyReward('${r.id}')"
+            class="px-3 py-1.5 bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 rounded-lg text-xs font-semibold hover:bg-indigo-600/30">
+            Harcat
+          </button>
+        </div>
+      `).join('');
+    }
+
+    // --- SEKME DEĞİŞTİRME ---
+    function switchTab(tabId) {
+      ['dashboard', 'wallet', 'store'].forEach(t => {
+        document.getElementById(`view${t.charAt(0).toUpperCase() + t.slice(1)}`).classList.add('hidden');
+        document.getElementById(`nav-${t}`).className = 'flex flex-col items-center py-1 text-slate-500';
+      });
+      document.getElementById(`view${tabId.charAt(0).toUpperCase() + tabId.slice(1)}`).classList.remove('hidden');
+      document.getElementById(`nav-${tabId}`).className = 'flex flex-col items-center py-1 text-emerald-400';
+    }
+
+    // Sayfa açıldığında veya sekme odağa geldiğinde delta kontrolü
+    window.addEventListener('visibilitychange', () => {
+      renderUI();
+    });
+
+    renderUI();
+  </script>
+</body>
+</html>
